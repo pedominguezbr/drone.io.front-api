@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: conduit-nodejs
+  namespace: ambiente
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-production
+  #   nginx.ingress.kubernetes.io/proxy-connect-timeout: "960"
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "960"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "960"
+spec:
+  rules:
+    - host: pedominguezbr8863.api.ambiente.fagurto.dev
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: conduit-nodejs
+              port: 
+                number: 8080
+  tls:
+  - hosts:
+    - pedominguezbr8863.api.ambiente.fagurto.dev
+    secretName: frontend-tls

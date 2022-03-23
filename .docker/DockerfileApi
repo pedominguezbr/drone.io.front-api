@@ -1,0 +1,18 @@
+FROM node:16
+
+RUN apt-get update \
+    && apt-get install -y lftp ssh sshpass \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /usr/app/build
+WORKDIR /usr/app
+
+COPY ./package.json /usr/app/package.json
+
+RUN npm install --production
+
+# Bundle app source
+COPY . .
+
+EXPOSE 8080
+CMD [ "node", "index.js" ]

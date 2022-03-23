@@ -1,0 +1,172 @@
+---
+kind: pipeline
+type: kubernetes
+name: deploy-api
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+- name: build image deploy
+  image: plugins/docker
+  settings:    
+    auto_tag_suffix: linux-amd64
+    dockerfile: .docker/DockerfileApi
+    context: api
+    repo: pedominguezbr8863.hub.fagurto.dev/backends/api
+    registry: pedominguezbr8863.hub.fagurto.dev
+    username:
+      from_secret: docker_username
+    password:
+      from_secret: docker_password
+    tags:
+      - latest
+      - ${DRONE_COMMIT}
+  when:
+   branch:
+   - feature/*
+   - develop
+   - staging
+   - production
+   event:
+   - push
+- name: "Template Deploy complete"
+  image: ubuntu:bionic
+  commands:
+    - uname -m
+    - apt update && apt upgrade -y 
+    - apt install sudo wget -y
+    - wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+    - chmod a+x /usr/local/bin/yq
+    - yq --version
+    - yq -i '.spec.template.spec.containers[0].image="pedominguezbr8863.hub.fagurto.dev/backends/api:${DRONE_COMMIT}"' ./k8s/api/deployment.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/api/deployment.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/api/service.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/api/ingress.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/api/secret_rg.yaml
+    - yq -i '.spec.rules[0].host="pedominguezbr8863.api.${DRONE_BRANCH}.fagurto.dev"' ./k8s/api/ingress.yaml
+    - yq -i '.spec.tls[0].hosts[0]="pedominguezbr8863.api.${DRONE_BRANCH}.fagurto.dev"' ./k8s/api/ingress.yaml
+    - cat ./k8s/api/deployment.yaml
+    - cat ./k8s/api/service.yaml
+    - cat ./k8s/api/ingress.yaml
+    - cat ./k8s/api/secret_rg.yaml
+  when:
+   branch:
+   - feature/*
+   - develop
+   - staging
+   - production
+   event:
+   - push
+- name: deploy k8s
+  image: sinlead/drone-kubectl
+  settings:
+    kubernetes_server:
+      from_secret: k8s_server
+    kubernetes_cert:
+      from_secret: k8s_cert
+    kubernetes_token:
+      from_secret: k8s_token
+  commands:
+    #- ls -lR .
+    #- kubectl get all --all-namespaces
+    - kubectl apply -f ./k8s/api/secret_rg.yaml
+    - kubectl apply -f ./k8s/api/deployment.yaml
+    #- kubectl wait --for=condition=complete -f ./k8s/api/deployment.yaml
+    - kubectl apply -f ./k8s/api/service.yaml
+    - kubectl apply -f ./k8s/api/ingress.yaml
+  when:
+    branch:
+    - feature/*
+    - develop
+    - staging
+    - production
+    event:
+    - push
+
+---
+kind: pipeline
+type: kubernetes
+name: deploy-front
+platform:
+  os: linux
+  arch: amd64
+steps:
+- name: build
+  image: node:14
+  commands:
+  - cd frontend
+  - npm install
+  - npm run-script build
+
+- name: build image front
+  image: plugins/docker
+  settings:    
+    auto_tag_suffix: linux-amd64
+    dockerfile: .docker/DockerfileFront
+    context: frontend
+    repo: pedominguezbr8863.hub.fagurto.dev/fronts/front
+    registry: pedominguezbr8863.hub.fagurto.dev
+    username:
+      from_secret: docker_username
+    password:
+      from_secret: docker_password
+    tags:
+      - latest
+      - ${DRONE_COMMIT}
+  when:
+   branch:
+   - feature/*
+   - develop
+   - staging
+   - production
+   event:
+   - push
+- name: "Template Deploy complete"
+  image: ubuntu:bionic
+  commands:
+    - uname -m
+    - apt update && apt upgrade -y 
+    - apt install sudo wget -y
+    - wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+    - chmod a+x /usr/local/bin/yq
+    - yq --version
+    - yq -i '.spec.template.spec.containers[0].image="pedominguezbr8863.hub.fagurto.dev/fronts/front:${DRONE_COMMIT}"' ./k8s/front/deployment.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/front/deployment.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/front/service.yaml
+    - yq -i '.metadata.namespace="${DRONE_BRANCH}"' ./k8s/front/ingress.yaml    
+    - yq -i '.spec.rules[0].host="pedominguezbr8863.front.${DRONE_BRANCH}.fagurto.dev"' ./k8s/front/ingress.yaml
+    - yq -i '.spec.tls[0].hosts[0]="pedominguezbr8863.front.${DRONE_BRANCH}.fagurto.dev"' ./k8s/front/ingress.yaml
+    - cat ./k8s/front/deployment.yaml
+    - cat ./k8s/front/service.yaml
+    - cat ./k8s/front/ingress.yaml    
+  when:
+   branch:
+   - feature/*
+   - develop
+   - staging
+   - production
+   event:
+   - push
+- name: deploy k8s
+  image: sinlead/drone-kubectl
+  settings:
+    kubernetes_server:
+      from_secret: k8s_server
+    kubernetes_cert:
+      from_secret: k8s_cert
+    kubernetes_token:
+      from_secret: k8s_token
+  commands:    
+    - kubectl apply -f ./k8s/front/deployment.yaml
+    #- kubectl wait --for=condition=complete -f ./k8s/front/deployment.yaml
+    - kubectl apply -f ./k8s/front/service.yaml
+    - kubectl apply -f ./k8s/front/ingress.yaml
+  when:
+    branch:
+    - feature/*
+    - develop
+    - staging
+    - production
+    event:
+    - push
